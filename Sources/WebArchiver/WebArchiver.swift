@@ -79,7 +79,7 @@ public class WebArchiver {
     
     private static func extractHTMLReferences(from resource: WebArchiveResource, includeJavascript: Bool) throws -> Set<URL> {
         
-        guard let htmlString = String(data: resource.data, encoding: .utf8) else {
+        guard let htmlString = String(data: resource.data, encoding: resource.encoding) else {
             throw ArchivingError.unsupportedEncoding
         }
         
@@ -97,7 +97,7 @@ public class WebArchiver {
     
     private static func extractCSSReferences(from resource: WebArchiveResource) throws -> Set<URL> {
         
-        guard let cssString = String(data: resource.data, encoding: .utf8) else {
+        guard let cssString = String(data: resource.data, encoding: resource.encoding) else {
             throw ArchivingError.unsupportedEncoding
         }
         

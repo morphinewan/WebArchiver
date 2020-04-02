@@ -7,6 +7,33 @@
 //
 
 import Foundation
+import os
+
+extension String {
+    /// 使用正则表达式查找匹配的文本
+    /// - Parameter regexPattern: 正则表达式
+    /// - Returns: 查找到的匹配的文本数组
+    public func groups(for regexPattern: String) -> [[String]] {
+        do {
+            let text = self
+            let regex = try NSRegularExpression(pattern: regexPattern)
+            let matches = regex.matches(in: text,
+                                        range: NSRange(text.startIndex..., in: text))
+            return matches.map { match in
+                (0 ..< match.numberOfRanges).map {
+                    let rangeBounds = match.range(at: $0)
+                    guard let range = Range(rangeBounds, in: text) else {
+                        return ""
+                    }
+                    return String(text[range])
+                }
+            }
+        } catch {
+            print("invalid regex: \(error.localizedDescription)")
+            return []
+        }
+    }
+}
 
 class ArchivingSession {
     
@@ -32,6 +59,33 @@ class ArchivingSession {
         self.cookies = cookies
         self.completion = completion
     }
+
+    /// 可能需要分析头部声明，确定字符串编码
+       /// - Parameter response: HTTPURLResponse
+       /// - Returns: 推断该使用的文本编码
+       func extractEncoding(from response: HTTPURLResponse) -> String.Encoding {
+           guard let contenType = response.allHeaderFields["Content-Type"] as? String,
+               let matches = contenType.groups(for: "^text/.+charset=(.+)$").first, matches.count == 2 else {
+               return .utf8
+           }
+           let charset = matches[1].lowercased()
+           var result: String.Encoding
+           switch charset {
+           case "utf-8":
+               result = .utf8
+           case "gb18030", "gbk":
+               result = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)))
+           case "gb2312":
+               result = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_2312_80.rawValue)))
+           default:
+               // 特殊的编码，这里需要特殊处理，碰到再说
+            if #available(iOS 12.0, *) {
+                os_log(.debug, "HTML Encoding: %@", charset)
+            }
+               result = .utf8
+           }
+           return result
+       }
     
     func load(url: URL, fallback: WebArchive?, expand: @escaping (WebArchiveResource) throws -> WebArchive ) {
         pendingTaskCount = pendingTaskCount + 1
@@ -45,8 +99,9 @@ class ArchivingSession {
             var archive = fallback
             if let error = error {
                 self.errors.append(ArchivingError.requestFailed(resource: url, error: error))
-            } else if let data = data, let mimeType = (response as? HTTPURLResponse)?.mimeType {
-                let resource = WebArchiveResource(url: url, data: data, mimeType: mimeType)
+            } else if let data = data, let response = response as? HTTPURLResponse, let mimeType = response.mimeType {
+                let encoding = self.extractEncoding(from: response)
+                let resource = WebArchiveResource(url: url, data: data, mimeType: mimeType, encoding: encoding)
                 do {
                     archive = try expand(resource)
                 } catch {
