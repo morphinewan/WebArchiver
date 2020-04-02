@@ -38,6 +38,7 @@ struct WebArchiveResource: Encodable {
     let url: URL
     let data: Data
     let mimeType: String
+    let encoding: String.Encoding
 }
 struct WebArchiveMainResource: Encodable {
     
